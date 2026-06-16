@@ -18,6 +18,7 @@ import {
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { restrictToVerticalAxis } from '@dnd-kit/modifiers';
+import { useVirtualizer } from '@tanstack/react-virtual';
 
 type SortKey = 'createdAt' | 'priority' | 'status' | 'name';
 const priorityOrder: Record<string, number> = { critical: 0, high: 1, medium: 2, low: 3 };
@@ -402,34 +403,28 @@ export function TaskListPanel() {
             modifiers={[restrictToVerticalAxis]}
           >
             <SortableContext items={taskIdOrder} strategy={verticalListSortingStrategy}>
-              <div className="space-y-0.5 py-1.5 stagger-children">
-                {filteredTasks.map((task) => (
-                  <SortableTaskItem
-                    key={task.id}
-                    task={task}
-                    isActive={activeTaskId === task.id}
-                    isSelected={selectedIds.has(task.id)}
-                    searchQuery={searchQuery}
-                    onSelect={() => setActiveTaskId(task.id)}
-                    onToggleSelect={(shiftKey) => toggleSelect(task.id, shiftKey)}
-                    onCycleStatus={() => {
-                      const idx = statusCycle.indexOf(task.status as typeof statusCycle[number]);
-                      const nextStatus = statusCycle[(idx + 1) % statusCycle.length];
-                      updateTaskStatus(task.id, nextStatus);
-                    }}
-                    onDuplicate={() => {
-                      const store = useStore.getState();
-                      store.duplicateTask(task.id);
-                    }}
-                    onDelete={() => {
-                      const store = useStore.getState();
-                      store.showConfirm(t.actions.delete, `Delete "${task.name}"?`, () => store.deleteTask(task.id));
-                    }}
-                    statusLabel={t.status[task.status as TaskStatus]}
-                    typeLabel={task.type}
-                  />
-                ))}
-              </div>
+              <TaskVirtualList
+                tasks={filteredTasks}
+                activeTaskId={activeTaskId}
+                selectedIds={selectedIds}
+                searchQuery={searchQuery}
+                onToggleSelect={toggleSelect}
+                onCycleStatus={(id) => {
+                  const task = filteredTasks.find((t) => t.id === id);
+                  if (!task) return;
+                  const idx = statusCycle.indexOf(task.status as typeof statusCycle[number]);
+                  const nextStatus = statusCycle[(idx + 1) % statusCycle.length];
+                  updateTaskStatus(id, nextStatus);
+                }}
+                onDuplicate={(id) => useStore.getState().duplicateTask(id)}
+                onDelete={(id, name) => {
+                  const store = useStore.getState();
+                  store.showConfirm(t.actions.delete, `Delete "${name}"?`, () => store.deleteTask(id));
+                }}
+                statusLabels={t.status}
+                typeLabels={t.taskTypes}
+                locale={locale}
+              />
             </SortableContext>
             <DragOverlay dropAnimation={null}>
               {activeDragTask && (
@@ -685,6 +680,76 @@ function SortableTaskItem({
             />
           </div>
         )}
+      </div>
+    </div>
+  );
+}
+
+const ITEM_HEIGHT = 72;
+
+function TaskVirtualList({
+  tasks, activeTaskId, selectedIds, searchQuery,
+  onToggleSelect, onCycleStatus, onDuplicate, onDelete,
+  statusLabels, locale,
+}: {
+  tasks: Task[];
+  activeTaskId: string | null;
+  selectedIds: Set<string>;
+  searchQuery: string;
+  onToggleSelect: (taskId: string, shiftKey: boolean) => void;
+  onCycleStatus: (taskId: string) => void;
+  onDuplicate: (taskId: string) => void;
+  onDelete: (taskId: string, name: string) => void;
+  statusLabels: Record<string, string>;
+  locale: string;
+}) {
+  const scrollRef = useRef<HTMLDivElement>(null);
+
+  const virtualizer = useVirtualizer({
+    count: tasks.length,
+    getScrollElement: () => scrollRef.current,
+    estimateSize: () => ITEM_HEIGHT,
+    overscan: 5,
+  });
+
+  return (
+    <div
+      ref={scrollRef}
+      className="flex-1 overflow-auto px-1"
+    >
+      <div
+        style={{ height: `${virtualizer.getTotalSize()}px`, width: '100%', position: 'relative' }}
+      >
+        {virtualizer.getVirtualItems().map((virtualRow) => {
+          const task = tasks[virtualRow.index];
+          return (
+            <div
+              key={task.id}
+              style={{
+                position: 'absolute',
+                top: 0,
+                left: 0,
+                width: '100%',
+                height: `${virtualRow.size}px`,
+                transform: `translateY(${virtualRow.start}px)`,
+              }}
+            >
+              <SortableTaskItem
+                task={task}
+                isActive={activeTaskId === task.id}
+                isSelected={selectedIds.has(task.id)}
+                searchQuery={searchQuery}
+                onSelect={() => {}}
+                onToggleSelect={(shiftKey) => onToggleSelect(task.id, shiftKey)}
+                onCycleStatus={() => onCycleStatus(task.id)}
+                onDuplicate={() => onDuplicate(task.id)}
+                onDelete={() => onDelete(task.id, task.name)}
+                statusLabel={statusLabels[task.status] || task.status}
+                typeLabel={task.type}
+              />
+            </div>
+          );
+        })}
       </div>
     </div>
   );
