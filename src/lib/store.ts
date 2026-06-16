@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import type { Task, ViewMode, FilterStatus, TaskStatus, TaskPriority, TaskType } from './types';
+import type { Task, ViewMode, FilterStatus, TaskStatus } from './types';
 
 interface ConfirmDialogState {
   open: boolean;
@@ -19,6 +19,7 @@ interface AppState {
   showCreateModal: boolean;
   showScratchpad: boolean;
   aiLoading: boolean;
+  isLoading: boolean;
   isSaving: boolean;
   lastSavedAt: string | null;
   zenMode: boolean;
@@ -50,8 +51,70 @@ interface AppState {
 }
 
 const STORAGE_KEY = 'ba-workspace-pro';
+const PREFS_KEY = 'ba-workspace-prefs';
 
 let saveTimer: ReturnType<typeof setTimeout> | null = null;
+
+async function apiPatch(tasks: Task[]) {
+  try {
+    await fetch('/api/tasks', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ tasks }),
+    });
+  } catch (e) {
+    console.error('API patch failed:', e);
+  }
+}
+
+async function apiPost(task: Task) {
+  try {
+    await fetch('/api/tasks', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ task }),
+    });
+  } catch (e) {
+    console.error('API post failed:', e);
+  }
+}
+
+async function apiDelete(id: string) {
+  try {
+    await fetch(`/api/tasks/${id}`, { method: 'DELETE' });
+  } catch (e) {
+    console.error('API delete failed:', e);
+  }
+}
+
+async function apiUpdate(id: string, updates: Partial<Task>) {
+  try {
+    await fetch(`/api/tasks/${id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(updates),
+    });
+  } catch (e) {
+    console.error('API update failed:', e);
+  }
+}
+
+function savePrefs(prefs: { darkMode: boolean; locale: string; scratchpadContent: string }) {
+  if (typeof window === 'undefined') return;
+  try {
+    localStorage.setItem(PREFS_KEY, JSON.stringify(prefs));
+  } catch {}
+}
+
+function loadPrefs() {
+  if (typeof window === 'undefined') return null;
+  try {
+    const raw = localStorage.getItem(PREFS_KEY);
+    return raw ? JSON.parse(raw) : null;
+  } catch {
+    return null;
+  }
+}
 
 export const useStore = create<AppState>((set, get) => ({
   tasks: [],
@@ -64,6 +127,7 @@ export const useStore = create<AppState>((set, get) => ({
   showCreateModal: false,
   showScratchpad: false,
   aiLoading: false,
+  isLoading: true,
   isSaving: false,
   lastSavedAt: null,
   zenMode: false,
@@ -86,14 +150,14 @@ export const useStore = create<AppState>((set, get) => ({
 
   addTask: (task) => {
     set((s) => ({ tasks: [task, ...s.tasks], activeTaskId: task.id, showCreateModal: false }));
-    get().saveToStorage();
+    apiPost(task);
   },
 
   updateTask: (id, updates) => {
     set((s) => ({
       tasks: s.tasks.map((t) => (t.id === id ? { ...t, ...updates, updatedAt: new Date().toISOString() } : t)),
     }));
-    get().saveToStorage();
+    apiUpdate(id, updates);
   },
 
   deleteTask: (id) => {
@@ -101,7 +165,7 @@ export const useStore = create<AppState>((set, get) => ({
       tasks: s.tasks.filter((t) => t.id !== id),
       activeTaskId: s.activeTaskId === id ? null : s.activeTaskId,
     }));
-    get().saveToStorage();
+    apiDelete(id);
   },
 
   setActiveTaskId: (id) => set({ activeTaskId: id }),
@@ -109,7 +173,8 @@ export const useStore = create<AppState>((set, get) => ({
   setFilterStatus: (status) => set({ filterStatus: status }),
   setScratchpadContent: (content) => {
     set({ scratchpadContent: content });
-    get().saveToStorage();
+    const { darkMode, locale } = get();
+    savePrefs({ darkMode, locale, scratchpadContent: content });
   },
 
   toggleDarkMode: () => {
@@ -118,14 +183,15 @@ export const useStore = create<AppState>((set, get) => ({
       if (typeof document !== 'undefined') {
         document.documentElement.classList.toggle('dark', newDark);
       }
+      savePrefs({ darkMode: newDark, locale: s.locale, scratchpadContent: s.scratchpadContent });
       return { darkMode: newDark };
     });
-    get().saveToStorage();
   },
 
   setLocale: (locale) => {
     set({ locale });
-    get().saveToStorage();
+    const { darkMode, scratchpadContent } = get();
+    savePrefs({ darkMode, locale, scratchpadContent });
   },
 
   setShowCreateModal: (show) => set({ showCreateModal: show }),
@@ -137,7 +203,7 @@ export const useStore = create<AppState>((set, get) => ({
     set((s) => ({
       tasks: s.tasks.map((t) => (t.id === id ? { ...t, status, updatedAt: new Date().toISOString() } : t)),
     }));
-    get().saveToStorage();
+    apiUpdate(id, { status });
   },
 
   duplicateTask: (id) => {
@@ -162,42 +228,62 @@ export const useStore = create<AppState>((set, get) => ({
       updatedAt: new Date().toISOString(),
     };
     set((s) => ({ tasks: [newTask, ...s.tasks], activeTaskId: newTask.id }));
-    get().saveToStorage();
+    apiPost(newTask);
   },
 
   deleteClosedTasks: () => {
+    const closed = get().tasks.filter((t) => t.status === 'done');
     set((s) => ({
       tasks: s.tasks.filter((t) => t.status !== 'done'),
       activeTaskId: s.tasks.find((t) => t.id === s.activeTaskId)?.status === 'done' ? null : s.activeTaskId,
     }));
-    get().saveToStorage();
+    closed.forEach((t) => apiDelete(t.id));
   },
 
   clearAllTasks: () => {
+    const all = get().tasks;
     set({ tasks: [], activeTaskId: null });
-    get().saveToStorage();
+    all.forEach((t) => apiDelete(t.id));
   },
 
   showConfirm: (title, message, onConfirm) => set({ confirmDialog: { open: true, title, message, onConfirm } }),
   hideConfirm: () => set({ confirmDialog: { open: false, title: '', message: '', onConfirm: () => {} } }),
 
-  loadFromStorage: () => {
+  loadFromStorage: async () => {
     if (typeof window === 'undefined') return;
-    try {
-      const raw = localStorage.getItem(STORAGE_KEY);
-      if (!raw) return;
-      const data = JSON.parse(raw);
-      if (data.tasks) set({ tasks: data.tasks });
-      if (data.scratchpadContent) set({ scratchpadContent: data.scratchpadContent });
-      if (data.darkMode !== undefined) {
-        set({ darkMode: data.darkMode });
-        if (data.darkMode && typeof document !== 'undefined') {
+
+    const prefs = loadPrefs();
+    if (prefs) {
+      if (prefs.darkMode !== undefined) {
+        set({ darkMode: prefs.darkMode });
+        if (prefs.darkMode && typeof document !== 'undefined') {
           document.documentElement.classList.add('dark');
         }
       }
-      if (data.locale) set({ locale: data.locale });
+      if (prefs.locale) set({ locale: prefs.locale });
+      if (prefs.scratchpadContent) set({ scratchpadContent: prefs.scratchpadContent });
+    }
+
+    try {
+      const res = await fetch('/api/tasks');
+      if (!res.ok) throw new Error('Failed to fetch tasks');
+      const data = await res.json();
+      if (data.success && Array.isArray(data.tasks)) {
+        set({ tasks: data.tasks, isLoading: false });
+      } else {
+        set({ isLoading: false });
+      }
     } catch (e) {
-      console.error('Failed to load from storage:', e);
+      console.error('Failed to load tasks from API:', e);
+      const raw = localStorage.getItem(STORAGE_KEY);
+      if (raw) {
+        try {
+          const legacy = JSON.parse(raw);
+          if (legacy.tasks) set({ tasks: legacy.tasks });
+          if (legacy.scratchpadContent) set({ scratchpadContent: legacy.scratchpadContent });
+        } catch {}
+      }
+      set({ isLoading: false });
     }
   },
 
@@ -206,13 +292,9 @@ export const useStore = create<AppState>((set, get) => ({
     set({ isSaving: true });
     if (saveTimer) clearTimeout(saveTimer);
     saveTimer = setTimeout(() => {
-      try {
-        const { tasks, scratchpadContent, darkMode, locale } = get();
-        localStorage.setItem(STORAGE_KEY, JSON.stringify({ tasks, scratchpadContent, darkMode, locale }));
-      } catch (e) {
-        console.error('Failed to save to storage:', e);
-      }
+      const { tasks } = get();
+      apiPatch(tasks);
       set({ isSaving: false, lastSavedAt: new Date().toISOString() });
-    }, 300);
+    }, 500);
   },
 }));

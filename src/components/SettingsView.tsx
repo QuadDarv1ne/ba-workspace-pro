@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useStore } from '@/lib/store';
 import { translations } from '@/lib/i18n';
 import { Input } from '@/components/ui/input';
@@ -25,39 +25,60 @@ interface IntegrationData {
   telegramChatId: string;
 }
 
+const defaultIntegration: IntegrationData = {
+  jiraHost: '', jiraEmail: '', jiraToken: '', jiraProjectKey: '', jiraCorsProxy: '',
+  confluenceHost: '', confluenceEmail: '', confluenceToken: '', confluenceSpaceId: '', confluenceCorsProxy: '',
+  telegramBotToken: '', telegramChatId: '',
+};
+
 export function SettingsView() {
   const { locale, tasks, setTasks } = useStore();
   const t = translations[locale];
 
   const [saved, setSaved] = useState(false);
-  const [integrations, setIntegrations] = useState<IntegrationData>(() => {
-    if (typeof window === 'undefined') {
-      return {
-        jiraHost: '', jiraEmail: '', jiraToken: '', jiraProjectKey: '', jiraCorsProxy: '',
-        confluenceHost: '', confluenceEmail: '', confluenceToken: '', confluenceSpaceId: '', confluenceCorsProxy: '',
-        telegramBotToken: '', telegramChatId: '',
-      };
+  const [loading, setLoading] = useState(true);
+  const [integrations, setIntegrations] = useState<IntegrationData>(defaultIntegration);
+
+  useEffect(() => {
+    async function load() {
+      try {
+        const res = await fetch('/api/settings');
+        if (res.ok) {
+          const data = await res.json();
+          if (data.success && data.settings) {
+            setIntegrations(data.settings);
+          }
+        }
+      } catch {
+        try {
+          const raw = localStorage.getItem(INTEGRATIONS_KEY);
+          if (raw) setIntegrations(JSON.parse(raw));
+        } catch {}
+      } finally {
+        setLoading(false);
+      }
     }
-    try {
-      const raw = localStorage.getItem(INTEGRATIONS_KEY);
-      if (raw) return JSON.parse(raw);
-    } catch {}
-    return {
-      jiraHost: '', jiraEmail: '', jiraToken: '', jiraProjectKey: '', jiraCorsProxy: '',
-      confluenceHost: '', confluenceEmail: '', confluenceToken: '', confluenceSpaceId: '', confluenceCorsProxy: '',
-      telegramBotToken: '', telegramChatId: '',
-    };
-  });
+    load();
+  }, []);
 
   const jiraConnected = !!(integrations.jiraHost && integrations.jiraEmail && integrations.jiraToken);
   const confluenceConnected = !!(integrations.confluenceHost && integrations.confluenceEmail && integrations.confluenceToken);
   const telegramConnected = !!(integrations.telegramBotToken && integrations.telegramChatId);
 
-  const save = () => {
-    localStorage.setItem(INTEGRATIONS_KEY, JSON.stringify(integrations));
-    setSaved(true);
-    toast({ title: t.actions.save, description: locale === 'ru' ? 'Настройки сохранены' : 'Settings saved' });
-    setTimeout(() => setSaved(false), 2000);
+  const save = async () => {
+    try {
+      await fetch('/api/settings', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ settings: integrations }),
+      });
+      localStorage.setItem(INTEGRATIONS_KEY, JSON.stringify(integrations));
+      setSaved(true);
+      toast({ title: t.actions.save, description: locale === 'ru' ? 'Настройки сохранены' : 'Settings saved' });
+      setTimeout(() => setSaved(false), 2000);
+    } catch {
+      toast({ title: 'Error', description: 'Failed to save settings', variant: 'destructive' });
+    }
   };
 
   const update = (key: keyof IntegrationData, value: string) => {
@@ -72,7 +93,7 @@ export function SettingsView() {
     a.download = `ba-workspace-backup-${new Date().toISOString().slice(0, 10)}.json`;
     a.click();
     URL.revokeObjectURL(url);
-    toast({ title: t.actions.save, description: `Exported ${tasks.length} tasks` });
+    toast({ title: t.actions.export, description: `Exported ${tasks.length} tasks` });
   };
 
   const importJson = () => {
@@ -91,9 +112,9 @@ export function SettingsView() {
             const newTasks = data.filter((t: any) => t.id && !existingIds.has(t.id));
             if (newTasks.length > 0) {
               setTasks([...newTasks, ...tasks]);
-              toast({ title: t.actions.save, description: `Imported ${newTasks.length} tasks` });
+              toast({ title: t.actions.export, description: `Imported ${newTasks.length} tasks` });
             } else {
-              toast({ title: t.actions.save, description: 'No new tasks to import' });
+              toast({ title: t.actions.export, description: 'No new tasks to import' });
             }
           }
         } catch {
@@ -104,6 +125,17 @@ export function SettingsView() {
     };
     input.click();
   };
+
+  if (loading) {
+    return (
+      <div className="flex-1 flex items-center justify-center bg-white/20 dark:bg-white/[0.02] backdrop-blur-xl">
+        <div className="text-center text-muted-foreground animate-fade-in">
+          <div className="w-8 h-8 border-2 border-orange-500/30 border-t-orange-500 rounded-full animate-spin mx-auto mb-3" />
+          <p className="text-xs">{locale === 'ru' ? 'Загрузка...' : 'Loading...'}</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="flex-1 overflow-auto p-6 bg-white/20 dark:bg-white/[0.02] backdrop-blur-xl">

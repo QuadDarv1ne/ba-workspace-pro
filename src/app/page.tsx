@@ -48,7 +48,7 @@ export default function Home() {
     darkMode, toggleDarkMode, locale, setLocale, loadFromStorage,
     viewMode, setViewMode, showScratchpad, showCreateModal,
     setShowCreateModal, tasks, isSaving, zenMode, toggleZenMode,
-    activeTaskId, setActiveTaskId, filterStatus,
+    activeTaskId, setActiveTaskId, filterStatus, isLoading,
   } = useStore();
   const [showShortcuts, setShowShortcuts] = React.useState(false);
 
@@ -247,6 +247,28 @@ export default function Home() {
 
       {/* Main content */}
       <main className="relative z-10 flex-1 flex overflow-hidden">
+        {isLoading ? (
+          <div className="flex-1 flex items-center justify-center bg-white/20 dark:bg-white/[0.02] backdrop-blur-xl">
+            <div className="flex flex-col items-center gap-4 animate-fade-in">
+              <div className="flex items-center gap-3">
+                <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-orange-500 to-orange-600 flex items-center justify-center text-white shadow-lg shadow-orange-500/20 animate-pulse">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M12 3L2 12h3v8h14v-8h3L12 3z" />
+                  </svg>
+                </div>
+                <div className="space-y-1.5">
+                  <div className="h-2.5 w-32 bg-gradient-to-r from-orange-500/20 to-orange-500/5 rounded-full animate-shimmer" />
+                  <div className="h-2 w-20 bg-black/5 dark:bg-white/5 rounded-full animate-shimmer" style={{ animationDelay: '0.2s' }} />
+                </div>
+              </div>
+              <div className="flex gap-2">
+                {[0, 1, 2].map((i) => (
+                  <div key={i} className="w-2 h-2 rounded-full bg-orange-500/40 animate-pulse" style={{ animationDelay: `${i * 0.15}s` }} />
+                ))}
+              </div>
+            </div>
+          </div>
+        ) : (
         <AnimatePresence mode="wait">
           {viewMode === 'workspace' && (
             <motion.div key="workspace" className="flex-1 flex overflow-hidden" variants={viewVariants} initial="initial" animate="animate" exit="exit">
@@ -287,6 +309,7 @@ export default function Home() {
             </motion.div>
           )}
         </AnimatePresence>
+        )}
       </main>
 
       {/* Create task modal */}
