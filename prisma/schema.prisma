@@ -1,0 +1,58 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model Task {
+  id              String   @id @default(cuid())
+  name            String
+  type            String   // integration, migration, uiux, feature, bug, general, api-design, performance, security, compliance
+  status          String   @default("active") // active, done, blocked, backlog
+  priority        String   @default("medium") // low, medium, high, critical
+  questions       String   @default("[]") // JSON array of {id, text, answer, completed}
+  acceptanceCrit  String   @default("[]") // JSON array
+  decisions       String   @default("[]")
+  risks           String   @default("[]")
+  tails           String   @default("[]") // JSON: {who, what, deadline}
+  dependencies    String   @default("[]")
+  notes           String   @default("")
+  timerSeconds    Int      @default(0)
+  timerRunning    Boolean  @default(false)
+  timerStartedAt  String?  // ISO date
+  collapsedSecs   String   @default("{}") // JSON: {sectionName: boolean}
+  tags            String   @default("[]") // JSON array of strings
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+}
+
+model IntegrationSettings {
+  id              String   @id @default(cuid())
+  jiraHost        String   @default("")
+  jiraEmail       String   @default("")
+  jiraToken       String   @default("")
+  jiraProjectKey  String   @default("")
+  jiraCorsProxy   String   @default("")
+  confluenceHost  String   @default("")
+  confluenceEmail String   @default("")
+  confluenceToken String   @default("")
+  confluenceSpaceId String @default("")
+  confluenceCorsProxy String @default("")
+  telegramBotToken String  @default("")
+  telegramChatId   String  @default("")
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+}
+
+model AnalyticsEvent {
+  id        String   @id @default(cuid())
+  eventType String   // task_created, task_completed, timer_started, export_done, ai_used
+  taskType  String?
+  taskType2 String?
+  duration  Int?
+  metadata  String   @default("{}") // JSON
+  createdAt DateTime @default(now())
+}
