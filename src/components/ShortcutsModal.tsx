@@ -7,9 +7,11 @@ import { Button } from '@/components/ui/button';
 const shortcuts = [
   { keys: '⌘N', label: 'New task' },
   { keys: '⌘K', label: 'Command palette' },
+  { keys: '⌘Z', label: 'Undo last action' },
   { keys: '⌘1-3', label: 'Switch views' },
   { keys: '⌘.', label: 'Toggle Zen mode' },
   { keys: 'j / k', label: 'Navigate tasks' },
+  { keys: '/', label: 'Focus search' },
   { keys: '?', label: 'Show shortcuts' },
   { keys: 'Esc', label: 'Close modals' },
 ];

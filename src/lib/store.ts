@@ -24,6 +24,7 @@ interface AppState {
   lastSavedAt: string | null;
   zenMode: boolean;
   confirmDialog: ConfirmDialogState;
+  canUndo: boolean;
 
   setTasks: (tasks: Task[]) => void;
   reorderTasks: (fromIndex: number, toIndex: number) => void;
@@ -48,12 +49,20 @@ interface AppState {
   saveToStorage: () => void;
   showConfirm: (title: string, message: string, onConfirm: () => void) => void;
   hideConfirm: () => void;
+  undo: () => void;
 }
 
 const STORAGE_KEY = 'ba-workspace-pro';
 const PREFS_KEY = 'ba-workspace-prefs';
 
 let saveTimer: ReturnType<typeof setTimeout> | null = null;
+const undoStack: Task[][] = [];
+const MAX_UNDO = 30;
+
+function pushUndo(tasks: Task[]) {
+  undoStack.push(tasks.map((t) => ({ ...t })));
+  if (undoStack.length > MAX_UNDO) undoStack.shift();
+}
 
 async function apiPatch(tasks: Task[]) {
   try {
@@ -131,6 +140,7 @@ export const useStore = create<AppState>((set, get) => ({
   isSaving: false,
   lastSavedAt: null,
   zenMode: false,
+  canUndo: false,
   confirmDialog: { open: false, title: '', message: '', onConfirm: () => {} },
 
   reorderTasks: (fromIndex, toIndex) => {
@@ -149,21 +159,26 @@ export const useStore = create<AppState>((set, get) => ({
   },
 
   addTask: (task) => {
-    set((s) => ({ tasks: [task, ...s.tasks], activeTaskId: task.id, showCreateModal: false }));
+    pushUndo(get().tasks);
+    set((s) => ({ tasks: [task, ...s.tasks], activeTaskId: task.id, showCreateModal: false, canUndo: true }));
     apiPost(task);
   },
 
   updateTask: (id, updates) => {
+    pushUndo(get().tasks);
     set((s) => ({
       tasks: s.tasks.map((t) => (t.id === id ? { ...t, ...updates, updatedAt: new Date().toISOString() } : t)),
+      canUndo: true,
     }));
     apiUpdate(id, updates);
   },
 
   deleteTask: (id) => {
+    pushUndo(get().tasks);
     set((s) => ({
       tasks: s.tasks.filter((t) => t.id !== id),
       activeTaskId: s.activeTaskId === id ? null : s.activeTaskId,
+      canUndo: true,
     }));
     apiDelete(id);
   },
@@ -200,8 +215,10 @@ export const useStore = create<AppState>((set, get) => ({
   toggleZenMode: () => set((s) => ({ zenMode: !s.zenMode })),
 
   updateTaskStatus: (id, status) => {
+    pushUndo(get().tasks);
     set((s) => ({
       tasks: s.tasks.map((t) => (t.id === id ? { ...t, status, updatedAt: new Date().toISOString() } : t)),
+      canUndo: true,
     }));
     apiUpdate(id, { status });
   },
@@ -232,22 +249,32 @@ export const useStore = create<AppState>((set, get) => ({
   },
 
   deleteClosedTasks: () => {
+    pushUndo(get().tasks);
     const closed = get().tasks.filter((t) => t.status === 'done');
     set((s) => ({
       tasks: s.tasks.filter((t) => t.status !== 'done'),
       activeTaskId: s.tasks.find((t) => t.id === s.activeTaskId)?.status === 'done' ? null : s.activeTaskId,
+      canUndo: true,
     }));
     closed.forEach((t) => apiDelete(t.id));
   },
 
   clearAllTasks: () => {
+    pushUndo(get().tasks);
     const all = get().tasks;
-    set({ tasks: [], activeTaskId: null });
+    set({ tasks: [], activeTaskId: null, canUndo: true });
     all.forEach((t) => apiDelete(t.id));
   },
 
   showConfirm: (title, message, onConfirm) => set({ confirmDialog: { open: true, title, message, onConfirm } }),
   hideConfirm: () => set({ confirmDialog: { open: false, title: '', message: '', onConfirm: () => {} } }),
+
+  undo: () => {
+    if (undoStack.length === 0) return;
+    const prev = undoStack.pop()!;
+    set({ tasks: prev, canUndo: undoStack.length > 0 });
+    apiPatch(prev);
+  },
 
   loadFromStorage: async () => {
     if (typeof window === 'undefined') return;

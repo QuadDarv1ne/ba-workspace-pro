@@ -48,7 +48,7 @@ export default function Home() {
     darkMode, toggleDarkMode, locale, setLocale, loadFromStorage,
     viewMode, setViewMode, showScratchpad, showCreateModal,
     setShowCreateModal, tasks, isSaving, zenMode, toggleZenMode,
-    activeTaskId, setActiveTaskId, filterStatus, isLoading,
+    activeTaskId, setActiveTaskId, filterStatus, isLoading, undo, canUndo,
   } = useStore();
   const [showShortcuts, setShowShortcuts] = React.useState(false);
 
@@ -84,6 +84,10 @@ export default function Home() {
       if (meta && e.key === '.') {
         e.preventDefault();
         toggleZenMode();
+      }
+      if (meta && e.key === 'z' && !e.shiftKey) {
+        e.preventDefault();
+        undo();
       }
 
       // j/k navigation in workspace view
