@@ -5,7 +5,7 @@ import { useStore } from '@/lib/store';
 import { translations } from '@/lib/i18n';
 import { typeColors, statusDotColors, formatTimer, statusCycle } from '@/lib/constants';
 import type { FilterStatus, TaskStatus, Task } from '@/lib/types';
-import { Plus, Download, Upload, Trash2, XCircle, Search, X, ArrowUpDown, GripVertical, CopyPlus, ChevronDown, FileJson, FileText, CheckSquare, PanelLeftClose, PanelLeftOpen } from 'lucide-react';
+import { Plus, Download, Upload, Trash2, XCircle, Search, X, ArrowUpDown, GripVertical, CopyPlus, ChevronDown, FileJson, FileText, CheckSquare, PanelLeftClose, PanelLeftOpen, Tag } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Input } from '@/components/ui/input';
@@ -46,6 +46,7 @@ export function TaskListPanel() {
   const [activeDragId, setActiveDragId] = useState<string | null>(null);
   const [showFooterActions, setShowFooterActions] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [filterTag, setFilterTag] = useState<string | null>(null);
   const lastClickedIdx = useRef<number>(-1);
 
   const sensors = useSensors(
@@ -96,6 +97,10 @@ export function TaskListPanel() {
       });
     }
 
+    if (filterTag) {
+      result = result.filter((task) => task.tags.includes(filterTag));
+    }
+
     result = [...result].sort((a, b) => {
       let cmp = 0;
       switch (sortKey) {
@@ -117,7 +122,7 @@ export function TaskListPanel() {
     });
 
     return result;
-  }, [tasks, filterStatus, searchQuery, sortKey, sortAsc]);
+  }, [tasks, filterStatus, searchQuery, sortKey, sortAsc, filterTag]);
 
   const taskIdOrder = useMemo(() => filteredTasks.map((t) => t.id), [filteredTasks]);
 
@@ -363,6 +368,39 @@ export function TaskListPanel() {
           ))}
         </div>
       </div>
+
+      {/* Tag filter chips */}
+      {(() => {
+        const allTags = [...new Set(tasks.flatMap((t) => t.tags))].sort();
+        if (allTags.length === 0) return null;
+        return (
+          <div className="px-2.5 pb-1.5">
+            <div className="flex items-center gap-1 flex-wrap">
+              {filterTag && (
+                <button
+                  onClick={() => setFilterTag(null)}
+                  className="text-[9px] font-semibold px-2 py-0.5 rounded-full bg-orange-500/15 text-orange-600 dark:text-orange-400 hover:bg-orange-500/25 transition-all press-scale flex items-center gap-1"
+                >
+                  <X className="w-2 h-2" />
+                  {filterTag}
+                </button>
+              )}
+              {allTags.filter((t) => t !== filterTag).slice(0, 8).map((tag) => (
+                <button
+                  key={tag}
+                  onClick={() => setFilterTag(tag)}
+                  className="text-[9px] font-medium px-2 py-0.5 rounded-full bg-black/4 dark:bg-white/4 text-muted-foreground hover:bg-black/8 dark:hover:bg-white/8 hover:text-foreground transition-all press-scale"
+                >
+                  {tag}
+                </button>
+              ))}
+              {allTags.length > 9 && !filterTag && (
+                <span className="text-[8px] text-muted-foreground/50">+{allTags.length - 8}</span>
+              )}
+            </div>
+          </div>
+        );
+      })()}
 
       {/* Sort toggle */}
       <div className="px-2.5 pb-1">
