@@ -9,7 +9,7 @@ import {
   ChevronDown, ChevronRight, Check, X, Plus, Copy, CopyPlus, Trash2,
   Play, Pause, RotateCcw, Sparkles, Bot, AlertTriangle, NotepadText,
   Bug, BookOpen, MessageSquare, Edit3, ChevronsUpDown, Loader2,
-  MoreHorizontal, ExternalLink, Clock, Tag,
+  MoreHorizontal, ExternalLink, Clock, Tag, FileText, Download,
 } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { Button } from '@/components/ui/button';
@@ -227,6 +227,25 @@ export function WorkspacePanel() {
     if (task.notes) text += `📝 Notes:\n${task.notes}\n`;
     navigator.clipboard.writeText(text);
     toast({ title: t.actions.copy, description: 'Copied!' });
+  };
+
+  const exportTaskMd = async () => {
+    const res = await fetch('/api/export', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ tasks: [task], format: 'markdown' }),
+    });
+    const data = await res.json();
+    if (data.content) {
+      const blob = new Blob([data.content], { type: 'text/markdown' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = data.filename;
+      a.click();
+      URL.revokeObjectURL(url);
+      toast({ title: t.actions.export, description: 'Task exported' });
+    }
   };
 
   const sendToJira = async () => {
@@ -464,6 +483,10 @@ export function WorkspacePanel() {
                 <DropdownMenuItem onClick={() => setShowScratchpad(!showScratchpad)}>
                   <NotepadText className="w-3.5 h-3.5 mr-2" />
                   {t.actions.scratchpad}
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={exportTaskMd}>
+                  <Download className="w-3.5 h-3.5 mr-2" />
+                  {t.actions.export}
                 </DropdownMenuItem>
                 <DropdownMenuSeparator />
                 <DropdownMenuItem onClick={() => showConfirm(t.actions.delete, `Delete "${task.name}"?`, () => deleteTask(task.id))} className="text-red-500 focus:text-red-500">

@@ -186,6 +186,50 @@ export function AnalyticsView() {
         <Card className="bg-white/40 dark:bg-white/5 backdrop-blur-lg border-white/25 dark:border-white/5">
           <CardHeader className="pb-2 pt-3 px-4">
             <CardTitle className="text-xs font-bold flex items-center gap-1.5">
+              <Clock className="w-3.5 h-3.5 text-blue-500" />
+              {t.analytics.timeTrend}
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="px-4 pb-3">
+            <div className="h-40">
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart
+                  data={tasks
+                    .filter((task) => task.timerSeconds > 0)
+                    .sort((a, b) => b.timerSeconds - a.timerSeconds)
+                    .slice(0, 10)
+                    .map((task) => ({
+                      name: task.name.length > 16 ? task.name.slice(0, 16) + '...' : task.name,
+                      minutes: Math.round(task.timerSeconds / 60),
+                    }))}
+                >
+                  <XAxis dataKey="name" tick={{ fontSize: 8 }} axisLine={false} tickLine={false} interval={0} angle={-30} textAnchor="end" height={50} />
+                  <YAxis tick={{ fontSize: 9 }} axisLine={false} tickLine={false} />
+                  <Tooltip
+                    contentStyle={{ fontSize: 11, borderRadius: 8, border: '1px solid rgba(255,255,255,0.1)' }}
+                    formatter={(value: number) => [`${value} min`, locale === 'ru' ? 'Время' : 'Time']}
+                  />
+                  <Bar dataKey="minutes" radius={[4, 4, 0, 0]} maxBarSize={32} fill="url(#timeGradient)" />
+                  <defs>
+                    <linearGradient id="timeGradient" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="0%" stopColor="#3b82f6" stopOpacity={0.9} />
+                      <stop offset="100%" stopColor="#60a5fa" stopOpacity={0.5} />
+                    </linearGradient>
+                  </defs>
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+            {tasks.filter((t) => t.timerSeconds > 0).length === 0 && (
+              <p className="text-[10px] text-muted-foreground/50 text-center mt-2">
+                {locale === 'ru' ? 'Запусти таймер, чтобы увидеть данные' : 'Start a timer to see data'}
+              </p>
+            )}
+          </CardContent>
+        </Card>
+
+        <Card className="bg-white/40 dark:bg-white/5 backdrop-blur-lg border-white/25 dark:border-white/5">
+          <CardHeader className="pb-2 pt-3 px-4">
+            <CardTitle className="text-xs font-bold flex items-center gap-1.5">
               <TrendingUp className="w-3.5 h-3.5 text-orange-500" />
               {t.analytics.recentActivity}
             </CardTitle>

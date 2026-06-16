@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useMemo, useCallback } from 'react';
+import React, { useState, useMemo, useCallback, useRef, useEffect } from 'react';
 import { useStore } from '@/lib/store';
 import { translations } from '@/lib/i18n';
 import { typeColors, statusDotColors, formatTimer, statusCycle } from '@/lib/constants';
@@ -50,6 +50,19 @@ export function TaskListPanel() {
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
   );
 
+  const searchRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if (e.key === '/' && !e.metaKey && !e.ctrlKey && e.target === document.body) {
+        e.preventDefault();
+        searchRef.current?.focus();
+      }
+    };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, []);
+
   const filters: { key: FilterStatus; label: string; count: number }[] = useMemo(() => [
     { key: 'all', label: t.tasks.all, count: tasks.length },
     { key: 'active', label: t.tasks.active, count: tasks.filter((t) => t.status === 'active').length },
@@ -65,11 +78,19 @@ export function TaskListPanel() {
 
     if (searchQuery.trim()) {
       const q = searchQuery.toLowerCase();
-      result = result.filter((task) =>
-        task.name.toLowerCase().includes(q) ||
-        task.tags.some((tag) => tag.toLowerCase().includes(q)) ||
-        task.type.toLowerCase().includes(q)
-      );
+      result = result.filter((task) => {
+        if (task.name.toLowerCase().includes(q)) return true;
+        if (task.tags.some((tag) => tag.toLowerCase().includes(q))) return true;
+        if (task.type.toLowerCase().includes(q)) return true;
+        if (task.notes.toLowerCase().includes(q)) return true;
+        if (task.questions.some((question) =>
+          question.text.toLowerCase().includes(q) || question.answer.toLowerCase().includes(q)
+        )) return true;
+        if (task.decisions.some((d) => d.text.toLowerCase().includes(q))) return true;
+        if (task.risks.some((r) => r.text.toLowerCase().includes(q))) return true;
+        if (task.acceptanceCrit.some((c) => c.text.toLowerCase().includes(q))) return true;
+        return false;
+      });
     }
 
     result = [...result].sort((a, b) => {
@@ -217,9 +238,10 @@ export function TaskListPanel() {
         <div className="relative">
           <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground/50" />
           <Input
+            ref={searchRef}
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder={locale === 'ru' ? 'Поиск задач...' : 'Search tasks...'}
+            placeholder={locale === 'ru' ? 'Поиск задач... (нажми /)' : 'Search tasks... (press /)'}
             className="h-8 pl-7 pr-7 text-[11px] bg-white/50 dark:bg-white/5 border-white/30 dark:border-white/5 rounded-lg"
           />
           {searchQuery && (
