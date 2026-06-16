@@ -17,6 +17,7 @@ import { Toaster } from '@/components/ui/toaster';
 import { Sun, Moon, Globe, BarChart3, Settings, LayoutDashboard, Loader2, Command } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { motion, AnimatePresence } from 'framer-motion';
+import { priorityCycle, statusCycle } from '@/lib/constants';
 
 const viewVariants = {
   initial: { opacity: 0, y: 12, scale: 0.98, filter: 'blur(4px)' },
@@ -49,6 +50,7 @@ export default function Home() {
     viewMode, setViewMode, showScratchpad, showCreateModal,
     setShowCreateModal, tasks, isSaving, zenMode, toggleZenMode,
     activeTaskId, setActiveTaskId, filterStatus, isLoading, undo, canUndo,
+    updateTaskStatus, updateTask,
   } = useStore();
   const [showShortcuts, setShowShortcuts] = React.useState(false);
 
@@ -91,7 +93,7 @@ export default function Home() {
       }
 
       // j/k navigation in workspace view
-      if (viewMode === 'workspace' && !showCreateModal && !zenMode) {
+      if (viewMode === 'workspace' && !showCreateModal && !zenMode && !meta) {
         const filtered = filterStatus === 'all'
           ? tasks
           : tasks.filter((t) => t.status === filterStatus);
@@ -107,11 +109,28 @@ export default function Home() {
           const prev = filtered[currentIdx - 1];
           if (prev) setActiveTaskId(prev.id);
         }
+        if (activeTaskId && (e.key === 'd' || e.key === 'D')) {
+          e.preventDefault();
+          const task = tasks.find((t) => t.id === activeTaskId);
+          if (task) {
+            const newStatus = task.status === 'done' ? 'active' : 'done';
+            updateTaskStatus(activeTaskId, newStatus);
+          }
+        }
+        if (activeTaskId && (e.key === 'p' || e.key === 'P')) {
+          e.preventDefault();
+          const task = tasks.find((t) => t.id === activeTaskId);
+          if (task) {
+            const idx = priorityCycle.indexOf(task.priority as typeof priorityCycle[number]);
+            const nextPriority = priorityCycle[(idx + 1) % priorityCycle.length];
+            updateTask(activeTaskId, { priority: nextPriority });
+          }
+        }
       }
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [setShowCreateModal, showCreateModal, setViewMode, viewMode, tasks, activeTaskId, filterStatus, setActiveTaskId, toggleZenMode, zenMode]);
+  }, [setShowCreateModal, showCreateModal, setViewMode, viewMode, tasks, activeTaskId, filterStatus, setActiveTaskId, toggleZenMode, zenMode, undo, updateTaskStatus, updateTask]);
 
   const activeTasks = tasks.filter((t) => t.status !== 'done').length;
 

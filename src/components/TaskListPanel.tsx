@@ -5,7 +5,7 @@ import { useStore } from '@/lib/store';
 import { translations } from '@/lib/i18n';
 import { typeColors, statusDotColors, formatTimer, statusCycle } from '@/lib/constants';
 import type { FilterStatus, TaskStatus, Task } from '@/lib/types';
-import { Plus, Download, Upload, Trash2, XCircle, Search, X, ArrowUpDown, GripVertical, CopyPlus, ChevronDown, FileJson, FileText, CheckSquare } from 'lucide-react';
+import { Plus, Download, Upload, Trash2, XCircle, Search, X, ArrowUpDown, GripVertical, CopyPlus, ChevronDown, FileJson, FileText, CheckSquare, PanelLeftClose, PanelLeftOpen } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Input } from '@/components/ui/input';
@@ -35,7 +35,7 @@ export function TaskListPanel() {
   const {
     tasks, activeTaskId, setActiveTaskId, filterStatus, setFilterStatus,
     setShowCreateModal, deleteClosedTasks, clearAllTasks, locale, showConfirm,
-    updateTaskStatus, reorderTasks,
+    updateTaskStatus, reorderTasks, sidebarCollapsed, toggleSidebar,
   } = useStore();
   const t = translations[locale];
 
@@ -263,25 +263,61 @@ export function TaskListPanel() {
   const activeCount = tasks.filter((t) => t.status !== 'done').length;
 
   return (
-    <div className="w-72 flex-shrink-0 flex flex-col border-r border-white/20 dark:border-white/5 bg-white/40 dark:bg-white/[0.04] backdrop-blur-2xl task-list-panel animate-slide-in-left shadow-r-lg">
+    <div className={`${sidebarCollapsed ? 'w-12' : 'w-72'} flex-shrink-0 flex flex-col border-r border-white/20 dark:border-white/5 bg-white/40 dark:bg-white/[0.04] backdrop-blur-2xl task-list-panel animate-slide-in-left shadow-r-lg transition-all duration-300`}>
       {/* Header with gradient accent */}
-      <div className="px-3 py-2.5 border-b border-white/15 dark:border-white/5 flex items-center justify-between bg-gradient-to-r from-orange-500/5 to-transparent">
-        <div className="flex items-center gap-2">
-          <div className="w-1.5 h-5 rounded-full bg-gradient-to-b from-orange-500 to-orange-600 shadow-sm shadow-orange-500/30" />
-          <span className="font-bold text-xs tracking-tight">{t.tasks.title}</span>
-          <span className="text-[10px] text-muted-foreground font-semibold bg-black/5 dark:bg-white/5 px-1.5 py-0.5 rounded-full tabular-nums">
-            {activeCount}<span className="text-muted-foreground/40">/{tasks.length}</span>
-          </span>
-        </div>
-        <Button
-          size="sm"
-          className="h-7 px-2.5 text-[11px] font-bold rounded-lg bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700 shadow-md shadow-orange-500/20 text-white press-scale ripple"
-          onClick={() => setShowCreateModal(true)}
-        >
-          <Plus className="w-3.5 h-3.5" />
-        </Button>
+      <div className={`${sidebarCollapsed ? 'px-1.5 py-2' : 'px-3 py-2.5'} border-b border-white/15 dark:border-white/5 flex items-center justify-between bg-gradient-to-r from-orange-500/5 to-transparent`}>
+        {!sidebarCollapsed ? (
+          <>
+            <div className="flex items-center gap-2">
+              <div className="w-1.5 h-5 rounded-full bg-gradient-to-b from-orange-500 to-orange-600 shadow-sm shadow-orange-500/30" />
+              <span className="font-bold text-xs tracking-tight">{t.tasks.title}</span>
+              <span className="text-[10px] text-muted-foreground font-semibold bg-black/5 dark:bg-white/5 px-1.5 py-0.5 rounded-full tabular-nums">
+                {activeCount}<span className="text-muted-foreground/40">/{tasks.length}</span>
+              </span>
+            </div>
+            <div className="flex items-center gap-1">
+              <Button
+                size="sm"
+                variant="ghost"
+                className="h-7 w-7 p-0 rounded-lg"
+                onClick={toggleSidebar}
+                title={locale === 'ru' ? 'Свернуть' : 'Collapse'}
+              >
+                <PanelLeftClose className="w-3.5 h-3.5" />
+              </Button>
+              <Button
+                size="sm"
+                className="h-7 px-2.5 text-[11px] font-bold rounded-lg bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700 shadow-md shadow-orange-500/20 text-white press-scale ripple"
+                onClick={() => setShowCreateModal(true)}
+              >
+                <Plus className="w-3.5 h-3.5" />
+              </Button>
+            </div>
+          </>
+        ) : (
+          <div className="flex flex-col items-center gap-2 w-full">
+            <Button
+              size="sm"
+              variant="ghost"
+              className="h-7 w-7 p-0 rounded-lg"
+              onClick={toggleSidebar}
+              title={locale === 'ru' ? 'Развернуть' : 'Expand'}
+            >
+              <PanelLeftOpen className="w-3.5 h-3.5" />
+            </Button>
+            <Button
+              size="sm"
+              className="h-7 w-7 p-0 rounded-lg bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700 shadow-md shadow-orange-500/20 text-white press-scale ripple"
+              onClick={() => setShowCreateModal(true)}
+            >
+              <Plus className="w-3.5 h-3.5" />
+            </Button>
+            <span className="text-[9px] font-bold text-muted-foreground tabular-nums">{activeCount}/{tasks.length}</span>
+          </div>
+        )}
       </div>
 
+      {!sidebarCollapsed && (<>
       {/* Search */}
       <div className="px-2.5 pt-2.5 pb-1">
         <div className="relative">
@@ -483,7 +519,10 @@ export function TaskListPanel() {
         </div>
       )}
 
+      </>)}
+
       {/* Footer actions */}
+      {!sidebarCollapsed && (
       <div className="px-2.5 py-2 border-t border-white/15 dark:border-white/5">
         <button
           onClick={() => setShowFooterActions(!showFooterActions)}
@@ -519,6 +558,7 @@ export function TaskListPanel() {
           </div>
         )}
       </div>
+      )}
     </div>
   );
 }

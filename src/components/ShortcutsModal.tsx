@@ -11,6 +11,8 @@ const shortcuts = [
   { keys: '⌘1-3', label: 'Switch views' },
   { keys: '⌘.', label: 'Toggle Zen mode' },
   { keys: 'j / k', label: 'Navigate tasks' },
+  { keys: 'd', label: 'Toggle done/active' },
+  { keys: 'p', label: 'Cycle priority' },
   { keys: '/', label: 'Focus search' },
   { keys: '?', label: 'Show shortcuts' },
   { keys: 'Esc', label: 'Close modals' },

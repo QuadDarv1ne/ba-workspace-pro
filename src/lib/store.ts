@@ -25,6 +25,7 @@ interface AppState {
   zenMode: boolean;
   confirmDialog: ConfirmDialogState;
   canUndo: boolean;
+  sidebarCollapsed: boolean;
 
   setTasks: (tasks: Task[]) => void;
   reorderTasks: (fromIndex: number, toIndex: number) => void;
@@ -50,6 +51,7 @@ interface AppState {
   showConfirm: (title: string, message: string, onConfirm: () => void) => void;
   hideConfirm: () => void;
   undo: () => void;
+  toggleSidebar: () => void;
 }
 
 const STORAGE_KEY = 'ba-workspace-pro';
@@ -141,6 +143,7 @@ export const useStore = create<AppState>((set, get) => ({
   lastSavedAt: null,
   zenMode: false,
   canUndo: false,
+  sidebarCollapsed: false,
   confirmDialog: { open: false, title: '', message: '', onConfirm: () => {} },
 
   reorderTasks: (fromIndex, toIndex) => {
@@ -275,6 +278,8 @@ export const useStore = create<AppState>((set, get) => ({
     set({ tasks: prev, canUndo: undoStack.length > 0 });
     apiPatch(prev);
   },
+
+  toggleSidebar: () => set((s) => ({ sidebarCollapsed: !s.sidebarCollapsed })),
 
   loadFromStorage: async () => {
     if (typeof window === 'undefined') return;
