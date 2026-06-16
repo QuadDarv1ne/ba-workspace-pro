@@ -3,58 +3,45 @@ import { NextRequest, NextResponse } from 'next/server';
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { action, host, email, token, projectKey, corsProxy, taskData } = body;
+    const { task, config } = body;
+
+    const host = config?.jiraHost;
+    const email = config?.jiraEmail;
+    const token = config?.jiraToken;
+    const projectKey = config?.jiraProjectKey;
+    const corsProxy = config?.jiraCorsProxy;
+
+    if (!host || !email || !token) {
+      return NextResponse.json({ error: 'Jira not configured. Set host, email and token in Settings.' }, { status: 400 });
+    }
 
     const baseUrl = corsProxy ? `${corsProxy}/` : `https://${host}`;
     const auth = Buffer.from(`${email}:${token}`).toString('base64');
 
-    if (action === 'create-issue') {
-      const res = await fetch(`${baseUrl}https://${host}/rest/api/2/issue`, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Basic ${auth}`,
-          'Content-Type': 'application/json',
+    const res = await fetch(`${baseUrl}/rest/api/2/issue`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Basic ${auth}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        fields: {
+          project: { key: projectKey },
+          summary: task.name,
+          description: formatTaskForJira(task),
+          issuetype: { name: mapTypeToIssueType(task.type) },
+          priority: { name: mapPriority(task.priority) },
         },
-        body: JSON.stringify({
-          fields: {
-            project: { key: projectKey },
-            summary: taskData.name,
-            description: formatTaskForJira(taskData),
-            issuetype: { name: mapTypeToIssueType(taskData.type) },
-            priority: { name: mapPriority(taskData.priority) },
-          },
-        }),
-      });
+      }),
+    });
 
-      if (!res.ok) {
-        const err = await res.text();
-        return NextResponse.json({ error: err }, { status: res.status });
-      }
-
-      const data = await res.json();
-      return NextResponse.json({ success: true, key: data.key, url: `https://${host}/browse/${data.key}` });
+    if (!res.ok) {
+      const err = await res.text();
+      return NextResponse.json({ error: err }, { status: res.status });
     }
 
-    if (action === 'add-comment') {
-      const { issueKey } = body;
-      const res = await fetch(`${baseUrl}https://${host}/rest/api/2/issue/${issueKey}/comment`, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Basic ${auth}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ body: formatTaskForJira(taskData) }),
-      });
-
-      if (!res.ok) {
-        const err = await res.text();
-        return NextResponse.json({ error: err }, { status: res.status });
-      }
-
-      return NextResponse.json({ success: true });
-    }
-
-    return NextResponse.json({ error: 'Unknown action' }, { status: 400 });
+    const data = await res.json();
+    return NextResponse.json({ success: true, key: data.key, url: `https://${host}/browse/${data.key}` });
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : 'Unknown error';
     return NextResponse.json({ error: message }, { status: 500 });
@@ -79,9 +66,7 @@ function formatTaskForJira(task: Record<string, unknown>): string {
     const ac = task.acceptanceCrit as Array<{ text: string; done: boolean }>;
     if (ac.length) {
       text += 'h3. Acceptance Criteria\n\n';
-      for (const c of ac) {
-        text += `* [${c.done ? 'x' : ' '}] ${c.text}\n`;
-      }
+      for (const c of ac) text += `* [${c.done ? 'x' : ' '}] ${c.text}\n`;
       text += '\n';
     }
   }

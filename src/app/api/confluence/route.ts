@@ -3,39 +3,45 @@ import { NextRequest, NextResponse } from 'next/server';
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { action, host, email, token, spaceId, corsProxy, taskData } = body;
+    const { task, config } = body;
+
+    const host = config?.confluenceHost;
+    const email = config?.confluenceEmail;
+    const token = config?.confluenceToken;
+    const spaceId = config?.confluenceSpaceId;
+    const corsProxy = config?.confluenceCorsProxy;
+
+    if (!host || !email || !token) {
+      return NextResponse.json({ error: 'Confluence not configured. Set host, email and token in Settings.' }, { status: 400 });
+    }
 
     const baseUrl = corsProxy ? `${corsProxy}/` : `https://${host}`;
     const auth = Buffer.from(`${email}:${token}`).toString('base64');
 
-    if (action === 'create-page') {
-      const res = await fetch(`${baseUrl}https://${host}/wiki/api/v2/pages`, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Basic ${auth}`,
-          'Content-Type': 'application/json',
+    const res = await fetch(`${baseUrl}/wiki/api/v2/pages`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Basic ${auth}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        spaceId: spaceId,
+        status: 'current',
+        title: task.name,
+        body: {
+          representation: 'wiki',
+          value: formatTaskForConfluence(task),
         },
-        body: JSON.stringify({
-          spaceId: spaceId,
-          status: 'current',
-          title: taskData.name,
-          body: {
-            representation: 'wiki',
-            value: formatTaskForConfluence(taskData),
-          },
-        }),
-      });
+      }),
+    });
 
-      if (!res.ok) {
-        const err = await res.text();
-        return NextResponse.json({ error: err }, { status: res.status });
-      }
-
-      const data = await res.json();
-      return NextResponse.json({ success: true, pageId: data.id, url: data._links?.base + data._links?.webui });
+    if (!res.ok) {
+      const err = await res.text();
+      return NextResponse.json({ error: err }, { status: res.status });
     }
 
-    return NextResponse.json({ error: 'Unknown action' }, { status: 400 });
+    const data = await res.json();
+    return NextResponse.json({ success: true, pageId: data.id, url: data._links?.base + data._links?.webui });
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : 'Unknown error';
     return NextResponse.json({ error: message }, { status: 500 });

@@ -3,10 +3,34 @@ import { NextRequest, NextResponse } from 'next/server';
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { botToken, chatId, message } = body;
+    const { config, task } = body;
+
+    const botToken = config?.telegramBotToken;
+    const chatId = config?.telegramChatId;
 
     if (!botToken || !chatId) {
       return NextResponse.json({ error: 'Bot token and Chat ID required' }, { status: 400 });
+    }
+
+    let message = '';
+    if (task) {
+      message = `*${task.name}*\nType: ${task.type} | Status: ${task.status} | Priority: ${task.priority}\n`;
+      const activeQs = (task.questions || []).filter((q: { removed: boolean }) => !q.removed);
+      const answered = activeQs.filter((q: { answer: string }) => q.answer);
+      if (answered.length) {
+        message += `\nQuestions answered: ${answered.length}/${activeQs.length}\n`;
+        answered.slice(0, 5).forEach((q: { text: string; answer: string }) => {
+          message += `• ${q.text}\n  → ${q.answer}\n`;
+        });
+      }
+      if (task.risks?.length) {
+        message += `\nRisks: ${task.risks.length}\n`;
+      }
+      if (task.notes) {
+        message += `\nNotes: ${task.notes.substring(0, 200)}\n`;
+      }
+    } else {
+      return NextResponse.json({ error: 'Task data required' }, { status: 400 });
     }
 
     const res = await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {

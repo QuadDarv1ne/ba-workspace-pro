@@ -6,6 +6,7 @@ import { translations } from '@/lib/i18n';
 import { getQuestionsForType } from '@/lib/templates';
 import { typeBorderColors, priorityColors, taskTypes } from '@/lib/constants';
 import type { TaskType, TaskPriority, Task } from '@/lib/types';
+import { motion } from 'framer-motion';
 import { X, Check, Plus, Tag, ArrowRight } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -296,7 +297,7 @@ export function CreateTaskModal() {
             {canCreate && <ArrowRight className="w-3 h-3" />}
           </Button>
         </div>
-      </div>
-    </div>
+      </motion.div>
+    </motion.div>
   );
 }

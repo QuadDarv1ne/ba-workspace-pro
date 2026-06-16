@@ -287,10 +287,7 @@ export default function Home() {
             </motion.div>
           )}
         </AnimatePresence>
-      </div>
-    </ErrorBoundary>
-  );
-}
+      </main>
 
       {/* Create task modal */}
       {showCreateModal && <CreateTaskModal />}
@@ -300,5 +297,6 @@ export default function Home() {
       <ConfirmDialog />
       <Toaster />
     </div>
+  </ErrorBoundary>
   );
 }
