@@ -5,7 +5,7 @@ import { useStore } from '@/lib/store';
 import { translations } from '@/lib/i18n';
 import { typeColors, statusDotColors, formatTimer, statusCycle } from '@/lib/constants';
 import type { FilterStatus, TaskStatus, Task } from '@/lib/types';
-import { Plus, Download, Upload, Trash2, XCircle, Search, X, ArrowUpDown, GripVertical, CopyPlus, ChevronDown, FileJson, FileText } from 'lucide-react';
+import { Plus, Download, Upload, Trash2, XCircle, Search, X, ArrowUpDown, GripVertical, CopyPlus, ChevronDown, FileJson, FileText, CheckSquare } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Input } from '@/components/ui/input';
@@ -44,6 +44,8 @@ export function TaskListPanel() {
   const [showSort, setShowSort] = useState(false);
   const [activeDragId, setActiveDragId] = useState<string | null>(null);
   const [showFooterActions, setShowFooterActions] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const lastClickedIdx = useRef<number>(-1);
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
@@ -210,6 +212,52 @@ export function TaskListPanel() {
     setTasks([...newTasks, ...currentTasks]);
   };
 
+  const toggleSelect = useCallback((taskId: string, shiftKey: boolean) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      const filtered = filteredTasks;
+      const clickedIdx = filtered.findIndex((t) => t.id === taskId);
+
+      if (shiftKey && lastClickedIdx.current >= 0) {
+        const start = Math.min(lastClickedIdx.current, clickedIdx);
+        const end = Math.max(lastClickedIdx.current, clickedIdx);
+        for (let i = start; i <= end; i++) {
+          next.add(filtered[i].id);
+        }
+      } else {
+        if (next.has(taskId)) {
+          next.delete(taskId);
+        } else {
+          next.add(taskId);
+        }
+      }
+      lastClickedIdx.current = clickedIdx;
+      return next;
+    });
+  }, [filteredTasks]);
+
+  const clearSelection = useCallback(() => {
+    setSelectedIds(new Set());
+    lastClickedIdx.current = -1;
+  }, []);
+
+  const bulkSetStatus = useCallback((status: TaskStatus) => {
+    selectedIds.forEach((id) => updateTaskStatus(id, status));
+    clearSelection();
+  }, [selectedIds, updateTaskStatus, clearSelection]);
+
+  const bulkDelete = useCallback(() => {
+    const names = tasks.filter((t) => selectedIds.has(t.id)).map((t) => t.name).join(', ');
+    showConfirm(
+      locale === 'ru' ? 'Удалить задачи' : 'Delete tasks',
+      `${locale === 'ru' ? 'Удалить' : 'Delete'} ${selectedIds.size} ${locale === 'ru' ? 'задач' : 'tasks'}?`,
+      () => {
+        selectedIds.forEach((id) => useStore.getState().deleteTask(id));
+        clearSelection();
+      }
+    );
+  }, [selectedIds, tasks, showConfirm, locale, clearSelection]);
+
   const activeDragTask = activeDragId ? tasks.find((t) => t.id === activeDragId) : null;
   const activeCount = tasks.filter((t) => t.status !== 'done').length;
 
@@ -360,8 +408,10 @@ export function TaskListPanel() {
                     key={task.id}
                     task={task}
                     isActive={activeTaskId === task.id}
+                    isSelected={selectedIds.has(task.id)}
                     searchQuery={searchQuery}
                     onSelect={() => setActiveTaskId(task.id)}
+                    onToggleSelect={(shiftKey) => toggleSelect(task.id, shiftKey)}
                     onCycleStatus={() => {
                       const idx = statusCycle.indexOf(task.status as typeof statusCycle[number]);
                       const nextStatus = statusCycle[(idx + 1) % statusCycle.length];
@@ -401,6 +451,42 @@ export function TaskListPanel() {
           </DndContext>
         )}
       </ScrollArea>
+
+      {/* Bulk selection action bar */}
+      {selectedIds.size > 0 && (
+        <div className="px-2.5 py-2 border-t border-orange-500/20 bg-orange-500/8 dark:bg-orange-500/5 animate-fade-in">
+          <div className="flex items-center justify-between mb-1.5">
+            <span className="text-[10px] font-bold text-orange-600 dark:text-orange-400">
+              {selectedIds.size} {locale === 'ru' ? 'выбрано' : 'selected'}
+            </span>
+            <button onClick={clearSelection} className="text-[9px] text-muted-foreground hover:text-foreground transition-colors">
+              {locale === 'ru' ? 'Сбросить' : 'Clear'}
+            </button>
+          </div>
+          <div className="flex flex-wrap gap-1">
+            {(['active', 'done', 'blocked', 'backlog'] as TaskStatus[]).map((status) => (
+              <button
+                key={status}
+                onClick={() => bulkSetStatus(status)}
+                className={`text-[9px] font-semibold px-2 py-1 rounded-md transition-all press-scale ${
+                  status === 'done' ? 'bg-emerald-500/15 text-emerald-600 hover:bg-emerald-500/25' :
+                  status === 'blocked' ? 'bg-red-500/15 text-red-600 hover:bg-red-500/25' :
+                  status === 'backlog' ? 'bg-amber-500/15 text-amber-600 hover:bg-amber-500/25' :
+                  'bg-orange-500/15 text-orange-600 hover:bg-orange-500/25'
+                }`}
+              >
+                {t.status[status]}
+              </button>
+            ))}
+            <button
+              onClick={bulkDelete}
+              className="text-[9px] font-semibold px-2 py-1 rounded-md bg-red-500/10 text-red-500 hover:bg-red-500/20 transition-all press-scale"
+            >
+              {t.actions.delete}
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Footer actions */}
       <div className="px-2.5 py-2 border-t border-white/15 dark:border-white/5">
@@ -456,10 +542,11 @@ function Highlight({ text, query }: { text: string; query: string }) {
 }
 
 function SortableTaskItem({
-  task, isActive, onSelect, onCycleStatus, statusLabel, typeLabel, searchQuery = '',
+  task, isActive, isSelected, onSelect, onToggleSelect, onCycleStatus, statusLabel, typeLabel, searchQuery = '',
   onDuplicate, onDelete,
 }: {
-  task: Task; isActive: boolean; onSelect: () => void; onCycleStatus: () => void;
+  task: Task; isActive: boolean; isSelected: boolean; onSelect: () => void; onToggleSelect: (shiftKey: boolean) => void;
+  onCycleStatus: () => void;
   statusLabel: string; typeLabel: string; searchQuery?: string;
   onDuplicate?: () => void; onDelete?: () => void;
 }) {
@@ -490,9 +577,11 @@ function SortableTaskItem({
       ref={setNodeRef}
       style={style}
       className={`relative flex items-stretch gap-0 rounded-xl transition-all duration-250 group overflow-hidden ${
-        isActive
-          ? 'bg-gradient-to-r from-orange-500/12 to-orange-500/6 border border-orange-500/25 shadow-sm shadow-orange-500/10'
-          : 'hover:bg-white/60 dark:hover:bg-white/[0.05] border border-transparent hover:border-white/30 dark:hover:border-white/8'
+        isSelected
+          ? 'bg-blue-500/10 border border-blue-500/30 shadow-sm shadow-blue-500/10'
+          : isActive
+            ? 'bg-gradient-to-r from-orange-500/12 to-orange-500/6 border border-orange-500/25 shadow-sm shadow-orange-500/10'
+            : 'hover:bg-white/60 dark:hover:bg-white/[0.05] border border-transparent hover:border-white/30 dark:hover:border-white/8'
       } ${isDragging ? 'shadow-xl ring-2 ring-orange-500/30' : ''} ${statusGlowClass}`}
       onMouseEnter={() => setShowActions(true)}
       onMouseLeave={() => setShowActions(false)}
@@ -507,7 +596,18 @@ function SortableTaskItem({
 
       <div className="flex-1 min-w-0 p-2 pl-2">
         <div className="flex items-start justify-between gap-1">
-          <button onClick={onSelect} className="flex-1 text-left min-w-0 group/task">
+          <button
+            onClick={(e) => { onToggleSelect(e.shiftKey); }}
+            className={`mt-0.5 w-3.5 h-3.5 rounded border flex-shrink-0 flex items-center justify-center transition-all duration-150 ${
+              isSelected
+                ? 'bg-blue-500 border-blue-500 text-white scale-110'
+                : 'border-gray-300 dark:border-gray-600 hover:border-blue-400 hover:scale-110'
+            }`}
+            title={isSelected ? (locale === 'ru' ? 'Снять выделение' : 'Deselect') : (locale === 'ru' ? 'Выбрать (Shift для диапазона)' : 'Select (Shift for range)')}
+          >
+            {isSelected && <CheckSquare className="w-2.5 h-2.5" />}
+          </button>
+          <button onClick={onSelect} className="flex-1 text-left min-w-0 group/task pl-1.5">
             <div className="font-semibold text-[12.5px] leading-tight truncate group-hover/task:text-orange-600 dark:group-hover/task:text-orange-400 transition-colors">
               <Highlight text={task.name} query={searchQuery} />
             </div>
